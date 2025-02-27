@@ -28,85 +28,361 @@
 	<body>
 		<div class="container">
 		<h1>CS184/284A Spring 2025 Homework 1 Write-Up</h1>
-		<div style="text-align: center;">Names: </div>
+		<div style="text-align: center;">Names: Lixin Ruan</div>
 
 		<br>
 
-		Link to webpage: (TODO) <a href="https://cs184.eecs.berkeley.edu/sp25">cs184.eecs.berkeley.edu/sp25</a>
+		Link to webpage: <a href="https://cs184.eecs.berkeley.edu/sp25">cs184.eecs.berkeley.edu/sp25</a>
 		
 		<br>
 
 		Link to GitHub repository: (TODO) <a href="https://cs184.eecs.berkeley.edu/sp25">cs184.eecs.berkeley.edu/sp25</a>
-
-		<figure>
-			<img src="lion.jpg" alt="Lion" style="width:50%"/>
-			<figcaption>You can add images with captions!</figcaption>
-		</figure>
-
 		<!--
 		We've already added one heading per task, to make your write-up as navigable when grading. Please fit your write-up within these sections!
 		-->
 
 		<h2>Overview</h2>
-		Give a high-level overview of what you implemented in this homework. Think about what you've built as a whole. Share your thoughts on what interesting things you've learned from completing the homework.
+		In this assignment I have implemented a basic rasterizer that can render basic triangles, interpolated color triangles and textured triangles, meanwhile enabled the rasterizer with multiple sampling methods, including multi-level supersampling and multi-level mipmap sampling.
 
 		<h2>Task 1: Drawing Single-Color Triangles</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		In this task, the triangles are rasterized with a basic direct sampling, wich means having one sample point per each pixel on the screen. The essence of this process is to do triple <b>line perpendicular test</b> and use the positivity of the results to decide wether the point is on the edge, inside the triangle or outside the triangle.
 
-		<p>Here is an example 2x2 gridlike structure using an HTML table. Each <b>tr</b> is a row and each <b>td</b> is a column in that row. You might find this useful for framing and showing your result images in an organized fashion.</p>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+		  <table style="width: 100%; text-align: center; border-collapse: collapse;">
+		    <tr>
+		      <td style="text-align: center;">
+		        <img src="task1.png" width="400px"/>
+		        <figcaption>Basic triangle rasterization showing multiple triangles with different colors</figcaption>
+		      </td>
+		    </tr>
+		  </table>
+		</div>
+
+		<h3>Main Steps</h3>
+		The algorithm specified in the `RasterizerImp::rasterize_triangle` are designed in following steps:
+
+		<ol>
+		<li>Initialize the variables used in the algorithm
+		  <ul>
+			<li>`Vector2D v[3]`: An array to store the coordinates of the three vertexes.</li>
+			<li>`size_t hUpperBound, hLowerBound, wLowerBound, wUpperBound`: the boundaries of the traverse area.</li>
+		  </ul>
+		</li>
+		<li>Calculate the square bounding box for the triangle.</li>
+		<li>Traverse the area by testing each point.
+		  <ol>
+			<li>Do the line perpendicular test of the point and each edge with a helper function `float LinePerpendicularTest()`.</li>
+			<li>If the test results includes zeroes, the point is judged to be on edges.
+			  <ul>
+				<li>According to the openGL/Direct3D's rule, judge whether the vertex is belonged to a top-left edge or not, and if it is an end point or not.</li>
+				<li>Fill the pixel accordingly if it belongs to the top-left edges.</li>
+			  </ul>
+			</li>
+			<li>If the test results are all positive or negative, the point is judged to be inside the triangle.
+			  <ul>
+				<li>Fill the pixel accordingly if it belongs to the top-left edges.</li>
+			  </ul>
+			</li>
+		  </ol>
+		</li>
+		</ol>
+
+		<h3>Mind the gap!</h3>
+		<ul>
+		<li>The order of the verticies is not a matter since one point's line perpendicular results can be all negative to prove it is in the triangle.(This would happen in clockwise scenario.)</li>
+		</ul>
+
+		<h3>Key math/code</h3>
+		<b>Line perpendicular test:</b>
+		<pre><code>float LinePerpendicularTest(const Vector2D& p, const Vector2D& p0, const Vector2D& p1) {
+		    return (p.y - p0.y) * (p1.x - p0.x) - (p.x - p0.x) * (p1.y - p0.y);
+		}
+		</code></pre>
+
+		<h2>Task 2: Antialiasing by Supersampling</h2>
+		In this task, I have mainly modified `void RasterizerImp::rasterize_triangle` , `void RasterizerImp::fill_pixel()`, `void RasterizerImp::resolve_to_framebuffer()` . The main modification happened in the data structures and down-sampling in resolve function while the algorithm steps remained the same with task1. (For line perpendicular test and edge point check.)
+
+		<h3>Modifications</h3>
+
+		<p>The modification happened in <code>sample_buffer</code>. It is resized to <code>width * height * sample_rate</code>.</p>
+
+		<p>In <code>void RasterizerImp::rasterize_triangle</code>, all of the points are upsampled by adding a sample point traverse inside each actual pixel traverse (of the bound box). Following steps are added:</p>
+
+		<ol>
+		    <li>Calculate segments (the gap between each sample points) in float.</li>
+		    <li>Create a local sample point set for each pixel <code>Vector2D points[sample_rate]</code></li>
+		    <li>Traverse each point.</li>
+		    <li><em>Following the steps in Task1</em></li>
+		    <li><strong>The fill_pixel invoke is modified to enter the correct position in buffer of each sample point.</strong></li>
+		</ol>
+
+		<p>In <code>void RasterizerImp::fill_pixel()</code>, I added an input <code>is_superSample</code> at the end of parameter list, default value as false, to ensure point rasterization and line rasterization remain normal. Additionally, for invocations in <code>rasterize_triangle</code> where <code>is_superSample = true</code>, the <code>x, y</code> are inputted in upsampling space. For <code>is_superSample = false</code>, they are in normal pixel space. It is following steps:</p>
+
+		<ol>
+		    <li>Check if <code>is_superSample = true</code>
+		        <ol>
+		            <li>Directly fill the buffer corresponding with input x, y.</li>
+		        </ol>
+		    </li>
+		    <li>Else
+		        <ol>
+		            <li>Calculate the coordinates of all sample points in the corresponding pixel.</li>
+		            <li>Traverse and fill the corresponding buffer position.</li>
+		        </ol>
+		    </li>
+		</ol>
+
+		<p>In <code>RasterizerImp::resolve_to_framebuffer()</code>, it downsamples <code>sample_buffer</code> into <code>rgb_framebuffer_target</code> in following steps:</p>
+
+		<ol>
+		    <li>Traverse pixel space.</li>
+		    <li>Add color values at all sample points.</li>
+		    <li>Divide the sum by sample rate, to get the color of each pixel.</li>
+		</ol>
+
+		<h3>Sampling Results</h3>
+
+		<div style="display: flex; flex-direction: column; align-items: center;">
+		  <table style="width: 100%; text-align: center; border-collapse: collapse;">
+		    <tr>
+		      <td style="text-align: center;">
+		        <img src="task2-1.png" width="400px"/>
+		        <figcaption>Aliasing artifacts without supersampling</figcaption>
+		      </td>
+		      <td style="text-align: center;">
+		        <img src="task2-4.png" width="400px"/>
+		        <figcaption>Smooth edges with 4x supersampling</figcaption>
+		      </td>
+		    </tr>
+			<tr>
+				<td style="text-align: center;">
+					<img src="task2-16.png" width="400px"/>
+					<figcaption>Smooth edges with 16x supersampling</figcaption>
+				  </td>
+			</tr>
+		  </table>
+		</div>
+
+		<p>From the results, we can see the supersampling enabled 4x and 16x image has a blury effect over the edges of the triangle. That is the result of box filtering, implemented with supersampling. Genereally it effectively reduces the aliasing artifacts when you look at the whole image..</p>
+		<h2>Task 3: Transforms</h2>
+		In this task, I tried to make the robot seemed to be jumping.
+
+		<div style="display: flex; flex-direction: column; align-items: center;">
+		  <table style="width: 100%; text-align: center; border-collapse: collapse;">
+		    <tr>
+		      <td style="text-align: center;">
+		        <img src="task3.png" width="400px"/>
+		        <figcaption>Robot pattern created using transforms, demonstrating combined translation, rotation, and scaling</figcaption>
+		      </td>
+		    </tr>
+		  </table>
+		</div>
+
+		<h2>Task 4: Barycentric coordinates</h2>
+		<p>
+		Barycentric coordinates are a coordinate system used to express the position of a point within a triangle. For any point P inside a triangle, its barycentric coordinates are represented as three values (\(\alpha\), \(\beta\), \(\gamma\)) that satisfy:
+		</p>
+
+		<div style="text-align: center; margin: 20px 0;">
+		    \[ \alpha + \beta + \gamma = 1 \]
+		    \[ P = \alpha A + \beta B + \gamma C \]
+		</div>
+
+		<p>Where:</p>
+		<ul>
+		    <li>(\(\alpha\), \(\beta\), \(\gamma\)) represent the weights of point P relative to triangle vertices A, B, and C</li>
+		    <li>Each weight represents the relative distance from P to the opposite edge</li>
+		    <li>When the point is inside the triangle, all weights are positive</li>
+		</ul>
+
+		<h3>Geometric Interpretation</h3>
+		<p>The geometric meaning of barycentric coordinates can be understood as:</p>
+		<ul>
+		    <li>\(\alpha\) equals the ratio of the area of triangle PBC to the total area of triangle ABC</li>
+		    <li>\(\beta\) equals the ratio of the area of triangle PCA to the total area of triangle ABC</li>
+		    <li>\(\gamma\) equals the ratio of the area of triangle PAB to the total area of triangle ABC</li>
+		</ul>
+
+		<div style="text-align: center; margin: 20px 0;">
+		    \[ \alpha = \frac{Area_{PBC}}{Area_{ABC}} \]
+		    \[ \beta = \frac{Area_{PCA}}{Area_{ABC}} \]
+		    \[ \gamma = \frac{Area_{PAB}}{Area_{ABC}} \]
+		</div>
+		
+		<h3>Math</h3>
+		<p>Given point P(x,y) and triangle vertices A(\(x_1\),\(y_1\)), B(\(x_2\),\(y_2\)), C(\(x_3\),\(y_3\)), barycentric coordinates can be computed as:</p>
+
+		<div style="text-align: center; margin: 20px 0;">
+		    \[ \alpha = \frac{(y_2-y_3)(x-x_3) + (x_3-x_2)(y-y_3)}{(y_2-y_3)(x_1-x_3) + (x_3-x_2)(y_1-y_3)} \]
+		    \[ \beta = \frac{(y_3-y_1)(x-x_3) + (x_1-x_3)(y-y_3)}{(y_2-y_3)(x_1-x_3) + (x_3-x_2)(y_1-y_3)} \]
+		    \[ \gamma = 1 - \alpha - \beta \]
+		</div>
+
+		<div style="display: flex; flex-direction: column; align-items: center;">
+		  <table style="width: 100%; text-align: center; border-collapse: collapse;">
+		    <tr>
+		      <td style="text-align: center;">
+		        <img src="task4.png" width="400px"/>
+		        <figcaption>Color interpolation using barycentric coordinates showing smooth color transitions</figcaption>
+		      </td>
+		    </tr>
+		  </table>
+		</div>
+
+		<h3>Color Interpolation:</h3>
+		<ul>
+		    <li> Enables smooth color transitions within triangles
+		        <div style="text-align: center; margin: 10px 0;">
+		            \[ Color_P = \alpha Color_A + \beta Color_B + \gamma Color_C \]
+		        </div>
+		    </li>
+		</ul>
+
+
+
+		<h2>Task 5: "Pixel sampling" for texture mapping</h2>
+		<h3>Pixel Sampling</h3>
+
+		<b>Nearest Sampling:</b>
+		<p>For each sample point in pixel space, find its nearest texel point on the texture and use that color precisely.</p>
+
+		<b>Bilinear Sampling:</b>
+		<p>For each sample point in pixel space, sample it with 4 closest texel point on the texture. The colors of 4 texels are processed with 3 times of linear interpolation by creating two Lerps between two pairs of texels, then interpolating between the two Lerps.</p>
+
+		<h3>Implementation</h3>
+		<p>The texture sampling is mainly implemented in <code>Color Texture::sample_bilinear()</code> and <code>Color Texture::sample_nearest()</code>.</p>
+
+		<p><strong>Nearest implementation steps:</strong></p>
+		<ol>
+		    <li>Multiply the uv coordinates with width and height.</li>
+		    <li>Round the result and shift the rounding in two axes accordingly with the relative direction of uv coordinates and result.</li>
+		    <li>Get the color from texture.</li>
+		</ol>
+
+		<p><strong>Bilinear implementation steps:</strong></p>
+		<ol>
+		    <li>Multiply the uv coordinates with width and height.</li>
+		    <li>Get the 4 closest texels' colors.</li>
+			<li>Create two Lerps between two pairs of texels.</li>
+		    <li>Interpolate the colors between the two Lerps.</li>
+		</ol>
+
+		<h3>Sampling Results</h3>
 		<div style="display: flex; flex-direction: column; align-items: center;">
 			<table style="width: 100%; text-align: center; border-collapse: collapse;">
 			  <tr>
 				<td style="text-align: center;">
-				  <img src="lion.jpg" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				  <img src="nearest-1.png" width="400px"/>
+				  <figcaption>Nearest Sampling with 1x supersampling</figcaption>
 				</td>
 				<td style="text-align: center;">
-				  <img src="lion.jpg" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				  <img src="nearst-16.png" width="400px"/>
+				  <figcaption>Nearest Sampling with 16x supersampling</figcaption>
 				</td>
 			  </tr>
 			  <tr>
 				<td style="text-align: center;">
-				  <img src="lion.jpg" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+					<img src="bilinear-1.png" width="400px"/>
+					<figcaption>Bilinear Sampling with 1x supersampling</figcaption>
 				</td>
 				<td style="text-align: center;">
-				  <img src="lion.jpg" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+					<img src="bilinear-16.png" width="400px"/>
+					<figcaption>Bilinear Sampling with 16x supersampling</figcaption>
 				</td>
 			  </tr>
 			</table>
 		</div>
+		<p>From the results, we can see that the bilinear sampling is smoother than the nearest sampling in both 1x and 16x. The 1x nearest sampling is aliasing while the 16x nearest sampling is much better. There is no huge difference between bilinear sampling with 16x and nearest sampling with 16x thanks to the supersampling, making the bilinear being more efficient in low sample rate.</p>
 		
-		<h2>Task 2: Antialiasing by Supersampling</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-		<h2>Task 3: Transforms</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-		<h2>Task 4: Barycentric coordinates</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-		<h2>Task 5: "Pixel sampling" for texture mapping</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
 		<h2>Task 6: "Level Sampling" with mipmaps for texture mapping</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		
+		<p><strong>Level Sampling</strong></p>
 
-		<h2>(Optional) Task 7: Extra Credit - Draw Something Creative!</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		<h3>Level Calculation</h3>
+		<p>The level of detail (D) for a pixel is calculated based on the rate of change in texture coordinates. For a point P with texture coordinates (u,v), we compute:</p>
 
-		<h2>Additional Notes (please remove)</h2>
-		<ul>
-			<li>You can also add code if you'd like as so: <code>code code code</code></li>
-			<li>If you'd like to add math equations, 
-				<ul>
-					<li>You can write inline equations like so: \( a^2 + b^2 = c^2 \)</li>
-					<li>You can write display equations like so: \[ a^2 + b^2 = c^2 \]</li>
-				</ul>
-			</li>
-		</ul>
+		<div style="text-align: center; margin: 20px 0;">
+		    \[ \frac{\partial u}{\partial x} = \frac{\partial u}{\partial x} = \frac{u_{x+1} - u_x}{1} \]
+		    \[ \frac{\partial v}{\partial x} = \frac{\partial v}{\partial x} = \frac{v_{x+1} - v_x}{1} \]
+		    \[ \frac{\partial u}{\partial y} = \frac{\partial u}{\partial y} = \frac{u_{y+1} - u_y}{1} \]
+		    \[ \frac{\partial v}{\partial y} = \frac{\partial v}{\partial y} = \frac{v_{y+1} - v_y}{1} \]
 		</div>
+
+		<p>The level D is then computed as:</p>
+
+		<div style="text-align: center; margin: 20px 0;">
+		    \[ L = \max\left(\sqrt{\left(\frac{\partial u}{\partial x}\right)^2 + \left(\frac{\partial v}{\partial x}\right)^2}, \sqrt{\left(\frac{\partial u}{\partial y}\right)^2 + \left(\frac{\partial v}{\partial y}\right)^2}\right) \]
+		    \[ D = \log_2(L) \]
+		</div>
+
+		<p>Where:</p>
+		<ul>
+		    <li>L represents the maximum rate of change in texture coordinates</li>
+		    <li>D is the final mipmap level (may be fractional)</li>
+		    <li>Negative D values are clamped to 0</li>
+		    <li>D values larger than the maximum mipmap level are clamped to that maximum</li>
+		</ul>
+
+		<h3>Implementation Steps</h3>
+		<ol>
+		    <li>Calculate texture coordinate derivatives (\(\frac{\partial u}{\partial x}\), \(\frac{\partial v}{\partial x}\), \(\frac{\partial u}{\partial y}\), \(\frac{\partial v}{\partial y}\))</li>
+		    <li>Compute L using the maximum of the two partial derivatives</li>
+		    <li>Calculate D using log base 2</li>
+		    <li>For level sampling:
+		        <ul>
+		            <li><strong>Zero:</strong> Always use level 0 (highest resolution)</li>
+		            <li><strong>Nearest:</strong> Round D to nearest integer</li>
+		            <li><strong>Linear:</strong> Interpolate between the two nearest levels</li>
+		        </ul>
+		    </li>
+		</ol>
+
+		<h3>Sampling Results</h3>
+
+
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+				<tr>
+					<td style="text-align: center;">
+						<img src="task6-zero-near.png" width="400px"/>
+						<figcaption>Level Zero with Pixel Nearest sampling</figcaption>
+					</td>
+					<td style="text-align: center;">
+						<img src="task6-zero-bi.png" width="400px"/>
+						<figcaption>Level Zero with Pixel Linear sampling</figcaption>
+					</td>
+				</tr>
+				<tr>
+					<td style="text-align: center;">
+						<img src="task6-near-near.png" width="400px"/>
+						<figcaption>Level Nearest with Pixel Nearest sampling</figcaption>
+					</td>
+					<td style="text-align: center;">
+						<img src="task6-near-bi.png" width="400px"/>
+						<figcaption>Level Nearest with Pixel Linear sampling</figcaption>
+					</td>
+				</tr>
+				<tr>
+					<td style="text-align: center;">
+						<img src="task6-bi-near.png" width="400px"/>
+						<figcaption>Level Linear with Pixel Nearest sampling</figcaption>
+					</td>
+					<td style="text-align: center;">
+						<img src="task6-bi-bi.png" width="400px"/>
+						<figcaption>Level Linear with Pixel Linear sampling</figcaption>
+					</td>
+				</tr>
+			</table>
+		</div>
+		<p>From these results, we can observe:</p>
+
+		<ul>
+			<li>Level Zero sampling shows the most detail but may exhibit aliasing at distances</li>
+			<li>Level Nearest provides sharp transitions between mipmap levels</li>
+			<li>Level Linear offers the smoothest transitions between different detail levels</li>
+			<li>Pixel Linear sampling further smooths the texture appearance compared to Pixel Nearest</li>
+			<li>The combination of Level Linear and Pixel Linear provides the highest quality result with smooth transitions both in space and across mipmap levels</li>
+		</ul>
+		
 	</body>
 </html>
