@@ -28,7 +28,7 @@
 	<body>
 		<div class="container">
 		<h1>CS184/284A Spring 2025 Homework 2 Write-Up</h1>
-		<div style="text-align: center;">Names: </div>
+		<div style="text-align: center;">Names: Lixin Ruan</div>
 
 		<br>
 
@@ -36,11 +36,10 @@
 
 		<br>
 		
-		Link to GitHub repository: (TODO) <a href="https://cs184.eecs.berkeley.edu/sp25">cs184.eecs.berkeley.edu/sp25</a>
+		Link to GitHub repository: <a href=https://github.com/cal-cs184-student/sp25-hw2-cuppuccino>https://github.com/cal-cs184-student/sp25-hw2-cuppuccino</a>
 
 		<figure>
 			<img src="teapot.png" alt="Teapot" style="width:50%"/>
-			<figcaption>You can add images with captions!</figcaption>
 		</figure>
 
 		<!--
@@ -48,69 +47,257 @@
 		-->
 
 		<h2>Overview</h2>
-		Give a high-level overview of what you implemented in this homework. Think about what you've built as a whole. Share your thoughts on what interesting things you've learned from completing the homework.
+		In this assignment, I have played with Bezier curves and surfaces, triangle meshes, and half-edge data structure. Bezier curves are really simple and intuitive, while half-edge is really furstrating.
 
 		<h2>Section I: Bezier Curves and Surfaces</h2>
 
 		<h3>Part 1: Bezier curves with 1D de Casteljau subdivision</h3>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		
+		<h4>Basis of De Casteljau's algorithm</h4>
+		<p>De Casteljau's algorithm is a geometric recursive method used to calculate points on a Bezier curve given a set of control points. The basic idea is:</p>
+		<ol>
+			<li>Given a set of control points, divide the curve into two parts and find the point on the curve at parameter t.</li>
+			<li>Repeat the process for each part until the curve is a single point.</li>
+		</ol>
 
-		<p>Here is an example 2x2 gridlike structure using an HTML table. Each <b>tr</b> is a row and each <b>td</b> is a column in that row. You might find this useful for framing and showing your result images in an organized fashion.</p>
+		<h4>My implementation of De Casteljau's algorithm in single step</h4>
+		<ol>
+			<li>Initialize <code>std::vector &lt;Vector2D&gt; result</code></li>
+			<li>Reserve the same size of points for <code>result</code> (optimized for vector).</li>
+			<li>Process each point with t</li>
+			<li>Return <code>result</code></li>
+		</ol>
+
+		<h4>Results</h4>
 		<div style="display: flex; flex-direction: column; align-items: center;">
 			<table style="width: 100%; text-align: center; border-collapse: collapse;">
 			  <tr>
 				<td style="text-align: center;">
-				  <img src="teapot.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				  <img src="part1-original.png" width="250px"/>
+				  <figcaption>Control points.</figcaption>
 				</td>
 				<td style="text-align: center;">
-				  <img src="teapot.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				  	<img src="part1-1.png" width="250px"/>
+				  	<figcaption>Level 1.</figcaption>
+				</td>
+				<td style="text-align: center;">
+					<img src="part1-2.png" width="250px"/>
+					<figcaption>Level 2.</figcaption>
 				</td>
 			  </tr>
 			  <tr>
 				<td style="text-align: center;">
-				  <img src="teapot.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				  <img src="part1-3.png" width="250px"/>
+				  <figcaption>Level 3.</figcaption>
 				</td>
 				<td style="text-align: center;">
-				  <img src="teapot.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				  	<img src="part1-4.png" width="250px"/>
+				  	<figcaption>Level 4.</figcaption>
+				</td>
+				<td style="text-align: center;">
+					<img src="part1-5.png" width="250px"/>
+					<figcaption>Level 5.</figcaption>
+				</td>
+			  </tr>
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="part1-curve.png" width="250px"/>
+				  <figcaption>Result from my implementation.</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  	<img src="part1-diff.png" width="250px"/>
+				  	<figcaption>A silightly different curve with different t.</figcaption>
 				</td>
 			  </tr>
 			</table>
 		</div>
 
 		<h3>Part 2: Bezier surfaces with separable 1D de Casteljau</h3>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
 
+		<h4>Basis of De Casteljau's algorithm extending to 3D surfaces</h4>
+		<p>While a Bezier curve is defined by a 1D array of control points, a Bezier surface is defined by a 2D grid of control points P[i,j]. This creates a tensor product surface parameterized by two values (u,v), where each parameter ranges from 0 to 1.</p>
+		<ol>
+			<li>The algorithm is similar to the 1D case, but now we need to handle two parameters instead of one. We first use Bezier curves in the u direction, and then get a new control point for v direction bezier curce at each u position on the curves.</li>
+			<li>Then we do the normal 1D de Casteljau algorithm on the v direction with the control points get from the previous step.</li>
+			<li>With v on this final curve, the result is a point on the surface.</li>
+		</ol>
+		<p>By this way, we can get any point on the surface by the parameter (u,v).</p>
+
+		<h4>My implementation of De Casteljau's algorithm in single step</h4>
+
+		<p> The implementation is similar to the 1D case, we use three functions to implement</p>
+		<p> <code>BezierCurve::evaluate(double u, double v)</code> is the main function to do the get the control points for 1D de Casteljau algorithm.</p>
+		<p> <code>BezierSurface::evaluate1D(std::vector<Vector3D> const &points, double t)</code> is the main function to do the 1D de Casteljau algorithm, it will do every single step of the algorithm untill we get the final point.</p>
+		<p> <code>BezierSurface::evaluateStep(std::vector<Vector3D> const &points, double t)</code> is the function to finish one step of the algorithm, very similar to the fucntion in part I.</p>
+
+		<h4>Results</h4>
+
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+				<tr>
+				<td style="text-align: center;">
+					<img src="part2.png" width="400px"/>
+					<figcaption>Tea pot result</figcaption>
+				</td>
+				</tr>
+			</table>
+		</div>
+	
 		<h2>Section II: Triangle Meshes and Half-Edge Data Structure</h2>
 
 		<h3>Part 3: Area-weighted vertex normals</h3>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		<h4>Introductionof area-weighted vertex normals</h4>
+		<p>Area-weighted vertex normals are a technique for calculating smooth vertex normals on a 3D mesh. Unlike simple averaging of face normals, this method weights each adjacent face's contribution by its area, resulting in more accurate and visually pleasing surface shading. (Phong Shading)</p>
+
+		<h4>My implementation</h4>
+		<ol>
+			<li>Initialize variables.</li>
+			<li>Traverse each face arround the vertex by updating the corresponding neighbor half-edge with <code>h->twin()->next()</code>.</li>
+			<li>Calculate the area of the face using cross product of two vectors.</li>
+			<li>Sum the normals of all the adjacent faces to get the normal of the vertex.</li>
+		</ol>
+
+		<h4>Results</h4>
+		
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+				<tr>
+				<td style="text-align: center;">
+					<img src="part3-normal.png" width="400px"/>
+					<figcaption>Normal face shading result</figcaption>
+				</td>
+				<td style="text-align: center;">
+					<img src="part3-phong.png" width="400px"/>
+					<figcaption>Phone shading result</figcaption>
+				</td>
+				</tr>
+			</table>
+		</div>
 
 		<h3>Part 4: Edge flip</h3>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		
+		<p>In this part, I implemented the edge flip function. The tricky part for this misshion, and the following ones, is that the complex dependency of the pointer-focused data structures is messy to update. Thus analisis of the dependencies is the key to implement the functions and avoid bugs.</p>
+		<p> The methodology I used to implement in this part is still stick to the conventional way of dealing with linked list, use temporary pointers (iterators) to record current position and lossable positions in the update process. And use different states to better distinguish dependencies and gradually update the whole mesh.</p>
+		
+		<h4>Analysis of the data structure</h4>
+
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+				<tr>
+				<td style="text-align: center;">
+					<img src="Data Structs.png" width="600px"/>
+					<figcaption>A brief diagram of the data structure</figcaption>
+				</td>
+				</tr>
+			</table>
+		</div>
+
+		<p>The diagram above shows the relationship between different data structures. It is obvious that all the actual geometric elements are only dependent on the correspondinghalf edges, while half edges do not care the content of the geometric elements</p>
+
+		<p>Moreover, the shape of the mesh is mainly defined by the next() pointer and twin pointer() of the half edges. Thus, I decided to update the faces, vertexies and edges first, and then update the pointing relationshipes in between the half edges.</p>
+
+		<p>The update process of the half edges would be determined in three states, to avoid losse ends and ensure correctness. The diagrams below shows the three states of the update process.</p>
+
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+				<tr>
+				<td style="text-align: center;">
+					<img src="States.png" width="600px"/>
+					<figcaption>A diagram showing transition between states</figcaption>
+				</td>
+				</tr>
+			</table>
+		</div>
+		<p> In the diragram, each box represents a half edge, and the arrows represent the pointer. Red color means that it need to change Next and Vertex. Orange ones should change Next and Face, while yellow ones only change Next.</p>
+		<h4>My implementation</h4>
+		<ol>
+			<li>Check boundary. (only skip)</li>
+			<li>Update faces and vertexes.</li>
+			<li>State transition.</li>
+		</ol>
+
+		<h4>Results</h4>
+		
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+				<tr>
+				<td style="text-align: center;">
+					<img src="part4-before.png" width="400px"/>
+					<figcaption>Before edge flip</figcaption>
+				</td>
+				<td style="text-align: center;">
+					<img src="part4-after.png" width="400px"/>
+					<figcaption>After edge flip</figcaption>
+				</td>
+				</tr>
+			</table>
+		</div>
 
 		<h3>Part 5: Edge split</h3>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		<p>In boundary case, I didn't use the complex method to implement the edge split. Instead, I use the most normal array to restore all the address. This is benificial because the index contains self-explain positional information.</p>
+		<p>To be specific, for each same category elements, the index of arrays is started from the e0 -> haldedge direction, going counter clockwise centered at the new vertex.</p>
 
-		<h3>Part 6: Loop subdivision for mesh upsampling</h3>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		<h4>algorithm Phases</h4>
+		<ol>
+			<li>data preparation, initialize all the array pointers.</li>
+			<li>Update new vertex.</li>
+			<li>Update edges.</li>
+			<li>Update faces.</li>
+			<li>Traverese each face in index to update half edges. Inside each face, start the update with outer half-edge</li>
+		</ol>
 
-		<h2>(Optional) Section III: Potential Extra Credit - Art Competition: Model something Creative</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-		<h2>Additional Notes (please remove)</h2>
-		<ul>
-			<li>You can also add code if you'd like as so: <code>code code code</code></li>
-			<li>If you'd like to add math equations, 
-				<ul>
-					<li>You can write inline equations like so: \( a^2 + b^2 = c^2 \)</li>
-					<li>You can write display equations like so: \[ a^2 + b^2 = c^2 \]</li>
-				</ul>
-			</li>
-		</ul>
+		<h4> Results</h4>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+				<tr>
+				<td style="text-align: center;">
+					<img src="part5-before.png" width="400px"/>
+					<figcaption>Before edge split</figcaption>
+				</td>
+				<td style="text-align: center;">
+					<img src="part5-after.png" width="400px"/>
+					<figcaption>After edge split</figcaption>
+				</td>
+				</tr>
+				<tr>
+				<td style="text-align: center;">
+					<img src="part5-combin-before.png" width="400px"/>
+					<figcaption>Before edge split and flip</figcaption>
+				</td>
+				<td style="text-align: center;">
+					<img src="part5-combin-after.png" width="400px"/>
+					<figcaption>After edge split and flip (it is not very obvious because the flipped edge is nearly overlapping other two due to the position)</figcaption>
+				</td>
+				</tr>
+			</table>
 		</div>
+		<h3>Part 6: Loop subdivision for mesh upsampling</h3>
+		<p>In this part, what I do is basically following the steps recommended in the instruction. So the steps are all the same and I would not waste time explaining those.</p>
+		<p>However, there are things woth mentioning.</p>
+		<p>The vertexes and edges are somehow undifined in the isNew property, so after each flip and split it is crucial to always update the isNew property.</p>
+		<p>In the split operations in step 3, Where I have to traverse all the old edges. I implemented it with a new vector storing all the old edge address in the beginning. There is a fun way to do it. It is pre-store the old edge end and use it. Because theoretically all the edges is stored in linked list and would be append in the end. But I didn't success doing so.</p>
+		
+		<h4>Results</h4>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+				<tr>
+				<td style="text-align: center;">
+					<img src="2.jpg" width="400px"/>
+					<figcaption>Cube loop subdivision</figcaption>
+				</td>
+				<td style="text-align: center;">
+					<img src="1.jpg" width="400px"/>
+					<figcaption>Cube loop subdivision</figcaption>
+				</td>
+
+				<td style="text-align: center;">
+					<img src="3.jpg" width="400px"/>
+					<figcaption>Cube loop subdivision</figcaption>
+				</td>
+
+				</tr>
+			</table>
+		</div>
+		<p>In the cube loop subdivision, It is becoming more and more smooth and loose information on edges.</p>
 	</body>
 </html>
