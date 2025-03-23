@@ -28,16 +28,15 @@
 	<body>
 		<div class="container">
 		<h1>CS184/284A Spring 2025 Homework 3 Write-Up</h1>
-		<div style="text-align: center;">Names: </div>
+		<div style="text-align: center;">Names: Lixin Ruan</div>
 
 		<br>
 
 		Link to webpage: (TODO) <a href="https://cs184.eecs.berkeley.edu/sp25">cs184.eecs.berkeley.edu/sp25</a>
-		Link to GitHub repository: (TODO) <a href="https://cs184.eecs.berkeley.edu/sp25">cs184.eecs.berkeley.edu/sp25</a>
+		Link to GitHub repository: <a href="https://github.com/cal-cs184-student/sp25-hw3-eason">https://github.com/cal-cs184-student/sp25-hw3-eason</a>
 		
 		<figure>
 			<img src="cornell.png" alt="Cornell Boxes with Bunnies" style="width:70%"/>
-			<figcaption>You can add images with captions!</figcaption>
 		</figure>
 
 		<!--
@@ -45,62 +44,539 @@
 		-->
 
 		<h2>Overview</h2>
-		Give a high-level overview of what you implemented in this homework. Think about what you've built as a whole. Share your thoughts on what interesting things you've learned from completing the homework.
+		In this assignment, I have struggled wirh ray tracing. Part 1 and Part 2 were dealing with the basics of ray tracing, intersection and bounding volume hierarchy. Begining from Part 3, I strated to deal with the actual path tracing sampling process. The direct illumination was implemented by Part 3. While the indirect illumination, or "at least one bounce estimation", was implemented by Part 4. Part 5 introduced the adaptive sampling process, giving the path tracing a way to converge to the "correct result" according to the z-distribution.
 
 		<h2>Part 1: Ray Generation and Scene Intersection</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		
+		<h3>Ray Generation</h3>
+		<p>In the ray generation process, we create samplerays from the camera for each pixel in the image. </p>
+		
+		<p>In <code>Camera::generate_ray(...)</code> function, we deal with how pixel coordinates is transformed to the ray's origin and direction. For each pixel (i,j), we:</p>
+		<ul>
+			<li>Calculate the normalized device coordinates (NDC) using the pixel coordinates</li>
+			<li>Transform these coordinates to screen space using the camera's field of view and aspect ratio</li>
+			<li>Create a ray with origin at the camera position and direction pointing through the calculated screen point</li>
+		</ul>
 
-		<p>Here is an example 2x2 gridlike structure using an HTML table. Each <b>tr</b> is a row and each <b>td</b> is a column in that row. You might find this useful for framing and showing your result images in an organized fashion.</p>
+		<p>In <code>PathTracer::raytrace_pixel(...)</code> function, we use a loop to generate random ray samples for each pixel and tracing them through the <code>PathTracer::est_radiance_global_illumination(...)</code> function. (which is the function implemented in Part 3 & 4)</p>
+		
+		<h3>Triangle Intersection Algorithm</h3>
+		<p>The Moller-Trumbore algorithm provides an efficient way to compute ray-triangle intersections. The core idea is to solve for both the intersection point and barycentric coordinates simultaneously.</p>
+
+		<h4>Basic Equation</h4>
+		<p>For a ray \( \vec{O} + t\vec{D} \) and a triangle with vertices \( \vec{P_0}, \vec{P_1}, \vec{P_2} \), the intersection point can be expressed using barycentric coordinates \( b_1, b_2 \):</p>
+		
+		<p>\[ \vec{O} + t\vec{D} = (1-b_1-b_2)\vec{P_0} + b_1\vec{P_1} + b_2\vec{P_2} \]</p>
+
+		<h4>Solution</h4>
+		<p>The algorithm solves for \( [t, b_1, b_2] \) using:</p>
+		
+		<p>\[ \begin{bmatrix} t \\ b_1 \\ b_2 \end{bmatrix} = \frac{1}{\vec{S_1} \cdot \vec{E_1}} \begin{bmatrix} \vec{S_2} \cdot \vec{E_2} \\ \vec{S_1} \cdot \vec{S} \\ \vec{S_2} \cdot \vec{D} \end{bmatrix} \]</p>
+
+		<p>Where:</p>
+		<ul>
+			<li>\( \vec{E_1} = \vec{P_1} - \vec{P_0} \)</li>
+			<li>\( \vec{E_2} = \vec{P_2} - \vec{P_0} \)</li>
+			<li>\( \vec{S} = \vec{O} - \vec{P_0} \)</li>
+			<li>\( \vec{S_1} = \vec{D} \times \vec{E_2} \)</li>
+			<li>\( \vec{S_2} = \vec{S} \times \vec{E_1} \)</li>
+		</ul>
+
+		<h4>Intersection Conditions</h4>
+		<p>An intersection is valid when all of these conditions are met:</p>
+		<ul>
+			<li>\( t \) is within the ray's \( [min_t, max_t] \) bounds</li>
+			<li>\( b_1 \geq 0 \) and \( b_2 \geq 0 \)</li>
+			<li>\( b_1 + b_2 \leq 1 \)</li>
+		</ul>
+
+		<h4>Computational Efficiency</h4>
+		<p>According to the slide, the algorithm's computational cost is:</p>
+		<ul>
+			<li>1 division</li>
+			<li>27 multiplications</li>
+			<li>17 additions/subtractions</li>
+		</ul>
+
+		<p>This makes it one of the most efficient ray-triangle intersection algorithms, requiring minimal vector operations while maintaining numerical stability.</p>
+		
+		<h3>Sphere Intersection Algorithm</h3>
+		<p>The sphere intersection algorithm solves for the intersection between a ray and a sphere using quadratic equations.</p>
+
+		<h4>Mathematical Setup</h4>
+		<p>Given:</p>
+		<ul>
+			<li>Ray equation: \( \mathbf{r}(t) = \mathbf{o} + t\mathbf{d}, \quad 0 \leq t < \infty \)</li>
+			<li>Sphere equation: \( (\mathbf{p} - \mathbf{c})^2 - R^2 = 0 \)</li>
+			<li>Where:
+				<ul>
+					<li>\( \mathbf{o} \) is the ray origin</li>
+					<li>\( \mathbf{d} \) is the ray direction</li>
+					<li>\( \mathbf{c} \) is the sphere center</li>
+					<li>\( R \) is the sphere radius</li>
+				</ul>
+			</li>
+		</ul>
+
+		<h4>Solution Process</h4>
+		<p>Substituting the ray equation into the sphere equation:</p>
+		<p>\[ (\mathbf{o} + t\mathbf{d} - \mathbf{c})^2 - R^2 = 0 \]</p>
+		
+		<p>This expands to a quadratic equation:</p>
+		<p>\[ at^2 + bt + c = 0 \]</p>
+		
+		<p>Where:</p>
+		<ul>
+			<li>\( a = \mathbf{d} \cdot \mathbf{d} \)</li>
+			<li>\( b = 2(\mathbf{o} - \mathbf{c}) \cdot \mathbf{d} \)</li>
+			<li>\( c = (\mathbf{o} - \mathbf{c}) \cdot (\mathbf{o} - \mathbf{c}) - R^2 \)</li>
+		</ul>
+
+		<h4>Finding Intersection Points</h4>
+		<p>The solution is given by the quadratic formula:</p>
+		<p>\[ t = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} \]</p>
+
+		<h4>Intersection Cases</h4>
+		<p>The discriminant \( b^2 - 4ac \) determines the number of intersections:</p>
+		<ul>
+			<li>If \( b^2 - 4ac < 0 \): No intersection</li>
+			<li>If \( b^2 - 4ac = 0 \): One intersection (ray tangent to sphere)</li>
+			<li>If \( b^2 - 4ac > 0 \): Two intersections (ray passes through sphere)</li>
+		</ul>
+
+		<p>For valid intersections, we need:</p>
+		<ul>
+			<li>The smallest positive t value within [min_t, max_t]</li>
+			<li>If both t values are negative, there is no valid intersection</li>
+		</ul>
+		
+		<h3>Part 1 Rendering Results</h3>
+		<p>Below are some rendering results from simple DAE scenes demonstrating ray intersection with different primitives with normal shading:</p>
 		<div style="display: flex; flex-direction: column; align-items: center;">
 			<table style="width: 100%; text-align: center; border-collapse: collapse;">
 			  <tr>
 				<td style="text-align: center;">
-				  <img src="cornell.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				  <img src="imgs/part1/CBspheres.png" width="400px"/>
+				  <figcaption>CBspheres.dae</figcaption>
 				</td>
 				<td style="text-align: center;">
-				  <img src="cornell.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				  <img src="imgs/part1/CBempty.png" width="400px"/>
+				  <figcaption>CBempty.dae</figcaption>
 				</td>
 			  </tr>
 			  <tr>
 				<td style="text-align: center;">
-				  <img src="cornell.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				  <img src="imgs/part1/cube.png" width="400px"/>
+				  <figcaption>cube.dae</figcaption>
 				</td>
 				<td style="text-align: center;">
-				  <img src="cornell.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				  <img src="imgs/part1/plane.png" width="400px"/>
+				  <figcaption>plane.dae</figcaption>
 				</td>
 			  </tr>
 			</table>
 		</div>
 		
 		<h2>Part 2: Bounding Volume Hierarchy</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		<p>In this part, I implemented a Bounding Volume Hierarchy (BVH) to accelerate ray intersection tests. The BVH construction algorithm uses the Surface Area Heuristic (SAH) to optimize the tree structure. The construction process truned out to be very fast, but the constucted result is not that good comparing to the bvh tree that calculated and sortedall possible partition points.</p>
+
+		<h3>BVH Construction Algorithm</h3>
+		<p>The algorithm follows these steps:</p>
+		<ol>
+			<li>For a given set of primitives:
+				<ul>
+					<li>Calculate the bounding box containing all primitives</li>
+					<li>If the number of primitives is less than max_leaf_size, create a leaf node</li>
+					<li>Otherwise, split the node and recurse</li>
+				</ul>
+			</li>
+			<li>For splitting a node:
+				<ul>
+					<li>Consider splits along all three axes (x, y, z)</li>
+					<li>For each axis, compute potential split at the centroid's coordinate</li>
+					<li>Calculate the SAH cost for each split</li>
+					<li>Choose the axis with minimum SAH cost</li>
+				</ul>
+			</li>
+		</ol>
+
+		<h3>Surface Area Heuristic (SAH)</h3>
+		<p>The SAH cost for a split is calculated as:</p>
+		<p>\[ Cost = \frac{SA(L) \cdot N_L + SA(R) \cdot N_R}{SA(P)} \]</p>
+		<p>Where:</p>
+		<ul>
+			<li>\( SA(L), SA(R) \) are the surface areas of left and right child nodes</li>
+			<li>\( N_L, N_R \) are the number of primitives in left and right children</li>
+			<li>\( SA(P) \) is the surface area of the parent node</li>
+		</ul>
+
+		<h3>Splitting Implementation</h3>
+		<p>For the chosen best axis:</p>
+		<ol>
+			<li>Partition primitives based on their centroid's coordinate compared to the split point</li>
+			<li>Use a two-pointer approach to efficiently partition the primitives:
+				<ul>
+					<li>Move left pointer right until finding a primitive that belongs on the right</li>
+					<li>Move right pointer left until finding a primitive that belongs on the left</li>
+					<li>Swap primitives when both pointers find candidates</li>
+				</ul>
+			</li>
+			<li>If the split results in all primitives on one side, force a median split</li>
+		</ol>
+
+		<h3>Optimization Considerations</h3>
+		<ul>
+			<li>The SAH cost function helps balance between:
+				<ul>
+					<li>Creating compact bounding volumes (spatial efficiency)</li>
+					<li>Evenly distributing primitives (traversal efficiency)</li>
+				</ul>
+			</li>
+			<li>The median fallback ensures we don't create degenerate trees</li>
+			<li>Using centroids for splitting decisions helps create more balanced trees</li>
+		</ul>
+
+		<h3>Part 2 Rendering Results</h3>
+		<p>Below are some rendering results from complex DAE scenes benefitted by the efficiency bump with BVH trees:</p>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="imgs/part2/cow.png" width="400px"/>
+				  <figcaption>cow.dae</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="imgs/part2/CBlucy.png" width="400px"/>
+				  <figcaption>CBlucy.dae</figcaption>
+				</td>
+			  </tr>
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="imgs/part2/maxplank.png" width="400px"/>
+				  <figcaption>maxplank.dae</figcaption>
+				</td>
+			  </tr>
+			</table>
+		</div>
+
+		<h3>Part 2 Speed Comparison</h3>
+		<p>The following results are rendered from a raspberry pi 5 with 16GB RAM and quad-core CPU. The time is dramatically reduced from above 30 seconds to 5 seconds, while each ray intersection ops are 8 times less. The speed of bch construction is pretty fast as we said at the beginning of this part, yet there is a trade-off between the quality of the tree and the speed of construction.</p>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="imgs/part2/speed_no_bch.png" width="400px"/>
+				  <figcaption>The result without BVH tree</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="imgs/part2/speed_bvh.png" width="400px"/>
+				  <figcaption>The result with BVH tree</figcaption>
+				</td>
+			  </tr>
+			</table>
+		</div>
 
 		<h2>Part 3: Direct Illumination</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		<p>In this part, I implemented two different methods for estimating direct illumination: hemisphere sampling and importance sampling. Both methods aim to calculate the direct lighting contribution at an intersection point, but they differ in their sampling strategies.</p>
 
-		<h2>Part 4: Global Illumination</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-		<h2>Part 5: Adaptive Sampling</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-
-		<h2>(Optional) Part 6: Extra Credit Opportunities</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-		
-		<h2>Additional Notes (please remove)</h2>
-		<ul>
-			<li>You can also add code if you'd like as so: <code>code code code</code></li>
-			<li>If you'd like to add math equations, 
+		<h3>Hemisphere Sampling</h3>
+		<p>The hemisphere sampling approach (<code>estimate_direct_lighting_hemisphere</code>) works as follows:</p>
+		<ol>
+			<li>Setup:
 				<ul>
-					<li>You can write inline equations like so: \( a^2 + b^2 = c^2 \)</li>
-					<li>You can write display equations like so: \[ a^2 + b^2 = c^2 \]</li>
+					<li>Create a coordinate system at the intersection point with normal N aligned to Z-axis</li>
+					<li>Transform the outgoing direction (towards camera) to this local space</li>
+					<li>Use total samples = number of lights × samples per light</li>
+				</ul>
+			</li>
+			<li>For each sample:
+				<ul>
+					<li>Sample a random direction in the hemisphere using BSDF</li>
+					<li>Transform the sampled direction to world space</li>
+					<li>Cast a ray in this direction to find potential light sources</li>
+					<li>If we hit something, compute the radiance contribution using the rendering equation:
+						\[ L_o = f_r(w_i, w_o) * L_i * cos\theta_i / (pdf * N_{samples}) \]</li>
+				</ul>
+			</li>
+		</ol>
+
+		<h3>Importance Sampling</h3>
+		<p>The importance sampling method (<code>estimate_direct_lighting_importance</code>) is more efficient as it samples lights directly:</p>
+		<ol>
+			<li>Setup is similar to hemisphere sampling</li>
+			<li>For each light source:
+				<ul>
+					<li>Handle delta lights (point lights) differently from area lights:
+						<ul>
+							<li>For delta lights: single sample with no division by number of samples</li>
+							<li>For area lights: multiple samples with proper weight</li>
+						</ul>
+					</li>
+					<li>For each sample:
+						<ul>
+							<li>Sample a point on the light source</li>
+							<li>Check if the sampled direction is below the surface</li>
+							<li>Cast shadow ray to check visibility</li>
+							<li>If visible, compute contribution using:
+								\[ L_o = f_r(w_i, w_o) * L_i * cos\theta_i / (pdf * N_{samples}) \]</li>
+						</ul>
+					</li>
+				</ul>
+			</li>
+		</ol>
+
+		<h3>Key Differences</h3>
+		<ul>
+			<li>Sampling Strategy:
+				<ul>
+					<li>Hemisphere: Samples directions uniformly in hemisphere</li>
+					<li>Importance: Samples directly on light sources</li>
+				</ul>
+			</li>
+			<li>Efficiency:
+				<ul>
+					<li>Hemisphere: Many samples might not hit any light source</li>
+					<li>Importance: All samples contribute to lighting (if not occluded)</li>
+				</ul>
+			</li>
+			<li>Visual Differences:
+				<ul>
+					<li>Hemisphere: More noise, uniform "glow" around lights</li>
+					<li>Importance: Less noise, better captures light directionality</li>
 				</ul>
 			</li>
 		</ul>
+
+		<h3>Implementation Details</h3>
+		<p>Both implementations handle:
+			<ul>
+				<li>Coordinate space transformations between world and local space</li>
+				<li>Proper PDF calculations for correct weighting</li>
+				<li>Shadow ray tests for visibility checking</li>
+				<li>BSDF evaluation for material response</li>
+				<li>Cosine term for Lambert's law</li>
+			</ul>
+		</p>
+
+		<h3>Rendered Results & Comparison</h3>
+		<p>The following pictures showed the results of hemisphere sampling and importance sampling with 4 samples per pixel. You can see the effectiveness of importance sampling in reducing noise and the overall performance of importance sampling is better than hemisphere sampling.</p>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="imgs/part3/bunny_4_4_hemisphere.png" width="400px"/>
+				  <figcaption>Hemisphere Sampling (4 samples per pixel)</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="imgs/part3/bunny_4_4_importance.png" width="400px"/>
+				  <figcaption>Importance Sampling (4 samples per pixel)</figcaption>
+				</td>
+			  </tr>
+			</table>
+		</div>
+
+		<h3>rays per area light camparison</h3>
+		<p>In this part, the following pictures showed the impact of rays per area light in importance direct shading</p>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="imgs/part2/cow.png" width="400px"/>
+				  <figcaption>cow.dae</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="imgs/part2/CBlucy.png" width="400px"/>
+				  <figcaption>CBlucy.dae</figcaption>
+				</td>
+			  </tr>
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="imgs/part2/maxplank.png" width="400px"/>
+				  <figcaption>maxplank.dae</figcaption>
+				</td>
+			  </tr>
+			</table>
+		</div>
+
+
+		<h2>Part 4: Global Illumination</h2>
+		<p>In this part, I implemented global illumination by extending the direct lighting to include indirect bounces. The implementation uses Russian Roulette for path termination and recursive ray tracing for bounce computation.</p>
+
+		<h3>Global Illumination Implementation</h3>
+		<p>The global illumination is implemented in two main functions:</p>
+		<ol>
+			<li><code>est_radiance_global_illumination</code>: The main entry point that combines:
+				<ul>
+					<li>Zero bounce radiance (emission)</li>
+					<li>At least one bounce radiance (direct + indirect)</li>
+				</ul>
+			</li>
+			<li><code>at_least_one_bounce_radiance</code>: Handles both direct and indirect illumination</li>
+		</ol>
+
+		<h3>Indirect Illumination Algorithm</h3>
+		<p>The <code>at_least_one_bounce_radiance</code> function implements the following strategy:</p>
+
+		<h4>Setup Phase</h4>
+		<ul>
+			<li>Create a coordinate system at the intersection point:
+				<ul>
+					<li>Transform from object space to world space (o2w)</li>
+					<li>Calculate its transpose for world to object space (w2o)</li>
+				</ul>
+			</li>
+			<li>Calculate hit point and outgoing direction in local coordinates</li>
+		</ul>
+
+		<h4>Path Termination</h4>
+		<p>Use Russian Roulette for path termination:</p>
+		<ul>
+			<li>Continuation probability: 0.4 (40%)</li>
+			<li>Terminate if:
+				<ul>
+					<li>Random number > 0.4, OR</li>
+					<li>Maximum ray depth reached</li>
+				</ul>
+			</li>
+		</ul>
+
+		<h4>Bounce Computation</h4>
+		<p>For each continuing path:</p>
+		<ol>
+			<li>Sample new direction using BSDF:
+				<ul>
+					<li>Get new direction (w_in)</li>
+					<li>Get probability density (pdf)</li>
+					<li>Get BSDF value (sample_f)</li>
+				</ul>
+			</li>
+			<li>Create and trace bounce ray:
+				<ul>
+					<li>Transform direction to world space</li>
+					<li>Increment ray depth</li>
+					<li>Set minimum distance to avoid self-intersection</li>
+				</ul>
+			</li>
+			<li>If intersection occurs, compute contribution:
+				\[ L_{indirect} = f_r(w_i, w_o) * L_{bounce} * cos\theta_i / (pdf * p_{RR}) \]
+				Where:
+				<ul>
+					<li>\( f_r \) is the BSDF value</li>
+					<li>\( L_{bounce} \) is the radiance from the bounce</li>
+					<li>\( cos\theta_i \) is the cosine term</li>
+					<li>\( p_{RR} = 0.4 \) is the Russian Roulette probability</li>
+				</ul>
+			</li>
+		</ol>
+
+		<h3>Result</h3>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="imgs/part5/spheres_rate.png" width="400px"/>
+				  <figcaption>Result with Global Illumination</figcaption>
+				</td>
+			  </tr>
+			</table>
+		</div>
+
+		<h3>Key Features</h3>
+		<ul>
+			<li>Path Termination:
+				<ul>
+					<li>Uses Russian Roulette for unbiased path termination</li>
+					<li>Balances computation cost with accuracy</li>
+				</ul>
+			</li>
+			<li>Recursive Structure:
+				<ul>
+					<li>Each bounce can spawn further bounces</li>
+					<li>Naturally handles multiple-bounce illumination</li>
+				</ul>
+			</li>
+			<li>Energy Conservation:
+				<ul>
+					<li>Properly weights contributions by PDF and Russian Roulette probability</li>
+					<li>Maintains physical correctness of light transport</li>
+				</ul>
+			</li>
+		</ul>
+
+		<h2>Part 5: Adaptive Sampling</h2>
+		<p>In this part, I implemented adaptive sampling to improve rendering efficiency. The core idea of adaptive sampling is to dynamically adjust the number of samples based on pixel variance, increasing samples in noisy areas and stopping early in well-converged regions.</p>
+
+		<h3>Adaptive Sampling Algorithm</h3>
+		<p>The algorithm follows these steps:</p>
+		<ol>
+			<li>Initial Setup:
+				<ul>
+					<li>samplesPerBatch: Controls the frequency of convergence checks</li>
+					<li>maxTolerance: Determines the convergence threshold</li>
+					<li>Tracking variables:
+						<ul>
+							<li>s1: Sum of sample luminances</li>
+							<li>s2: Sum of squared sample luminances</li>
+							<li>sampled_num: Current number of samples</li>
+						</ul>
+					</li>
+				</ul>
+			</li>
+			<li>Sampling Process:
+				<ul>
+					<li>Sample each pixel until one of these conditions is met:
+						<ul>
+							<li>Reach maximum sample count</li>
+							<li>Meet convergence criteria</li>
+						</ul>
+					</li>
+					<li>Update statistics after each sample:
+						<ul>
+							<li>Accumulate sample contribution</li>
+							<li>Update s1 and s2</li>
+						</ul>
+					</li>
+				</ul>
+			</li>
+			<li>Convergence Check:
+				<ul>
+					<li>Check every samplesPerBatch samples</li>
+					<li>Calculate confidence interval using:
+						\[ I = \frac{1.96\sigma}{\sqrt{n}} \leq \mu \cdot maxTolerance \]
+						Where:
+						<ul>
+							<li>\(\sigma\) is standard deviation: \(\sqrt{\frac{s_2 - s_1^2/n}{n-1}}\)</li>
+							<li>\(\mu\) is mean: \(s_1/n\)</li>
+							<li>\(n\) is current sample count</li>
+						</ul>
+					</li>
+				</ul>
+			</li>
+		</ol>
+
+		<h3>Implementation Details</h3>
+		<p>In the code implementation:</p>
+		<ul>
+			<li>Use 95% confidence interval (1.96 standard deviations)</li>
+			<li>Record actual sample count per pixel in sampleCountBuffer</li>
+			<li>Compute mean and variance dynamically to avoid storing all samples</li>
+			<li>Use online update formulas to minimize memory usage</li>
+		</ul>
+
+		<h3>Rendering Result</h3>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td style="text-align: center;">
+				  <img src="imgs/part5/spheres_rate.png" width="400px"/>
+				  <figcaption>Result of AdaptiveSampling (2048 spp)</figcaption>
+				</td>
+				<td style="text-align: center;">
+				  <img src="imgs/part5/spheres_rate_rate.png" width="400px"/>
+				  <figcaption>Rate of Adaptive Sampling</figcaption>
+				</td>
+			  </tr>
+			</table>
 		</div>
 	</body>
 </html>
